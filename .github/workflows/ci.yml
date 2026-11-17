@@ -1,0 +1,42 @@
+name: ci
+
+# The core of tsf-data includes no Test Environment header, so it builds
+# and runs on its own: ci/core-test.sh builds it with ASan/UBSan, with
+# SQLite and with Arrow/Parquet C++ (Apache's apt repository), and checks
+# it against the facts the companion suite's generator computes with
+# Python (and pyarrow, the second Parquet implementation). The TE glue,
+# the RPCs and the engine TAPI are exercised by tsf-data-ts.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  core:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: interpretica-io/tsf-data-ts
+          path: tsf-data-ts
+
+      - name: Install jansson, SQLite, Arrow/Parquet C++ and pyarrow
+        run: |
+          set -eux
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config ca-certificates lsb-release wget \
+            libjansson-dev libsqlite3-dev python3-pip
+          cd /tmp
+          wget -q "https://packages.apache.org/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb"
+          sudo apt-get install -y ./apache-arrow-apt-source-latest-*.deb
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libarrow-dev libparquet-dev
+          pip3 install --break-system-packages 'pyarrow==21.0.0'
+
+      - name: Core contract tests (ASan/UBSan)
+        run: DATAGEN=tsf-data-ts/tsf-data-ts/lib/py/datagen.py ./ci/core-test.sh
