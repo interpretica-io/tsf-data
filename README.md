@@ -2,12 +2,13 @@
 
 Dataset validation for Test Environment (TE) suites, packaged as an
 external TE repository (consumed with the `TE_EXT_REPO` builder
-directive). It checks data rather than running pipelines: it reads a
-dataset where it lives, on a Test Agent, profiles it, compares it with
-another, asserts data-quality rules over it, generates deterministic
-synthetic data and reconciles a pipeline's input with its output. Only
-bounded samples and reports reach the engine, so a test can validate a
-multi-gigabyte dataset without the engine ever holding it.
+directive). It reads a dataset where it lives, on a Test Agent, and
+profiles it, compares it with another, asserts data-quality rules over
+it, generates deterministic synthetic data and reconciles a pipeline's
+input with its output. It does not run pipelines; a test triggers them
+through the module that drives the system under test. Only bounded
+samples and reports reach the engine, so a test can validate a
+multi-gigabyte dataset that the engine never holds.
 
 Three libraries:
 
@@ -15,10 +16,10 @@ Three libraries:
   it, so it builds and tests on its own, see `ci/`) over jansson, SQLite
   and POSIX regex, plus one C++ unit (`ta_data_parquet.cpp`) that reaches
   Apache Arrow/Parquet C++ through a C ABI, the approach of tsf-cv.
-  `ta_data.c` is the TE glue: it keeps the opened datasets in the RPC
+  `ta_data.c`, the TE glue, keeps the opened datasets in the RPC
   server, keyed by handle.
-- `rpcs_data`: the `data_*` RPCs (RPC program 46), all one shape:
-  options in as text, a result and a report out as text.
+- `rpcs_data`: the `data_*` RPCs (RPC program 46). Each takes its
+  options as text and returns a result and a report as text.
 - `tapi_data`: engine side. `tapi_data.h` is what tests use;
   `tapi_data_rpc.h` is the layer beneath it.
 
@@ -84,13 +85,13 @@ call.
 
 ## Checks and verdicts
 
-A check measures; the threshold judges. Each check returns what it
-counted and a bounded, sorted sample of offending records, and the TAPI
-decides pass or fail against a `tapi_data_threshold` (violations allowed,
-a fraction allowed, or a statistic for distribution checks).
+Each check returns what it counted and a bounded, sorted sample of the
+offending records. The TAPI then decides pass or fail against a
+`tapi_data_threshold`: the violations allowed, the fraction allowed, or
+the largest statistic allowed for distribution checks.
 `tapi_data_check_verdict()` logs the result and, on failure, emits an
-ERROR verdict whose text holds counts and thresholds only, never a path
-or a time, so TRC matches it run after run.
+ERROR verdict. Its text holds counts and thresholds and no path or
+time, so TRC matches it run after run.
 
 - **schema**: required and unexpected columns, types, nullability,
   nested structures, then every value. `mode=compatible` accepts
